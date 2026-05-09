@@ -1,46 +1,63 @@
-# Google Ads Lead Form → TiDB Setup
+# Google Ads Lead Form -> CRM Opportunities Setup
 
-## What was added to your existing project
+## What the webhook does
 
-1. `api/google_ads_webhook.py` — new file with all Google Ads webhook logic
-2. `api/index.py` — 6 lines added at the bottom to register the new routes
-3. `setup_google_leads_table.sql` — run once in TiDB to create the table
+`POST /api/google-leads` receives Google Ads lead form submissions and saves them directly into `crm_Opportunities`.
 
-## Your new webhook URL (after Vercel deploy)
+The old `google_ads_leads` table is no longer used.
 
-    POST https://your-project.vercel.app/api/google-leads
+## Webhook URL
 
-## Steps to deploy
+```text
+POST https://your-project.vercel.app/api/google-leads
+```
 
-### 1. Add env variable to Vercel
-Go to Vercel → Your Project → Settings → Environment Variables
-Add: GOOGLE_WEBHOOK_TOKEN = any secret string you choose (e.g. "my_google_secret_123")
+## Environment Variables
 
-### 2. Deploy to Vercel
-    git add .
-    git commit -m "add google ads lead form webhook"
-    git push
+Required:
 
-Vercel auto-deploys from your GitHub push.
+```text
+GOOGLE_WEBHOOK_TOKEN=<secret key configured in Google Ads>
+```
 
-### 3. Create TiDB table (optional — auto-creates on first request)
-Run setup_google_leads_table.sql in your TiDB dashboard.
+Optional CRM defaults used for foreign-key columns:
 
-### 4. Add webhook URL in Google Ads
-Google Ads → Tools & Settings → Conversions → Lead form asset
-→ Webhook URL: https://your-project.vercel.app/api/google-leads
-→ Key: GOOGLE_WEBHOOK_TOKEN value you set in step 1
-→ Click "Send test data" → should show 200 OK
+```text
+CRM_DEFAULT_USER_ID=<Users.id>
+CRM_DEFAULT_ACCOUNT_ID=<crm_Accounts.id>
+CRM_DEFAULT_CAMPAIGN_ID=<crm_campaigns.id>
+CRM_DEFAULT_SALES_STAGE_ID=<crm_Opportunities_Sales_Stages.id>
+CRM_DEFAULT_OPPORTUNITY_TYPE_ID=<crm_Opportunities_Type.id>
+```
 
-## How lead data flows
+Leave optional defaults empty if you do not want to set those CRM references.
 
-1. User fills Google Ads lead form
-2. Google sends POST to your webhook URL
-3. Your code extracts: full_name, phone, email, city, campaign_id, ad_id, form_id
-4. Data is saved to TiDB → google_ads_leads table
+## Stored Fields
 
-## View your leads in TiDB
+Google Ads lead data is mapped into `crm_Opportunities`:
 
-    SELECT full_name, phone, email, city, created_at
-    FROM google_ads_leads
-    ORDER BY created_at DESC;
+```text
+name                Google Ads Lead - <name/email/phone/lead_id>
+clientName          full name
+phone               phone number
+email               email
+city                city/location/region
+ad_id               Google ad_id or creative_id
+form_id             Google form_id or lead_form_id
+source              google_ads
+category            google_ads
+description         lead_id/campaign_id/ad_id/form_id summary
+custom_fields_data  parsed Google Ads fields and metadata
+raw_data            full original webhook payload
+```
+
+The CRM `campaign` column is a foreign key, so the webhook uses `CRM_DEFAULT_CAMPAIGN_ID` there. The raw Google `campaign_id` is preserved in `description`, `custom_fields_data`, and `raw_data`.
+
+## View Google Ads Opportunities
+
+```sql
+SELECT id, name, clientName, phone, email, city, ad_id, form_id, createdAt
+FROM crm_Opportunities
+WHERE source = 'google_ads'
+ORDER BY createdAt DESC;
+```
