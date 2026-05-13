@@ -382,6 +382,15 @@ def _extract_twitter_lead_events(payload):
     Shape 1 — Lead Generation Card via DM events (older format)
     Shape 2 — Ads API lead_generation_card_events (newer format)
     """
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            payload = {}
+
+    if not isinstance(payload, dict):
+        payload = {}
+
     events = []
 
     # Shape 1: direct_message_events (Lead Gen Card)
