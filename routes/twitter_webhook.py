@@ -63,6 +63,30 @@ def _fetch_lead_from_x(lead_id, ad_account_id):
     GET /9/accounts/{account_id}/leads/{lead_id}
     Returns normalised dict with field_data list — same shape _normalize_fields() expects.
     """
+    use_mock_leads = os.getenv("X_USE_MOCK_LEADS", "false").lower() == "true"
+    is_test_lead = str(lead_id).startswith("test_lead_")
+    if use_mock_leads or is_test_lead:
+        log_event(
+            "Using mock X lead data",
+            lead_id=lead_id,
+            ad_account_id=ad_account_id,
+            reason="X_USE_MOCK_LEADS" if use_mock_leads else "test_lead_id",
+        )
+        return {
+            "id": lead_id,
+            "field_data": [
+                {"name": "full_name", "values": ["Pankaj Test"]},
+                {"name": "email", "values": [f"{lead_id}@example.com"]},
+                {"name": "phone_number", "values": ["+919876543210"]},
+                {"name": "city", "values": ["Pune"]},
+                {"name": "country", "values": ["India"]},
+                {"name": "company", "values": ["Test Company Pvt Ltd"]},
+                {"name": "job_title", "values": ["Marketing Manager"]},
+                {"name": "message", "values": ["Mock X lead for deployment testing"]},
+            ],
+            "raw": {"mock": True},
+        }
+
     bearer = os.getenv("X_BEARER_TOKEN", "")
     url = f"https://ads-api.twitter.com/9/accounts/{ad_account_id}/leads/{lead_id}"
     headers = {"Authorization": f"Bearer {bearer}"}
