@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from flask import Flask, request
 
 from routes.crm_ingest import crm_ingest_bp
+from routes.twitter_webhook import twitter_bp
 
 
 load_dotenv()
@@ -21,6 +22,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Register CRM ingest blueprint (POST /api/crm/contacts/ingest)
 app.register_blueprint(crm_ingest_bp)
+app.register_blueprint(twitter_bp)
 
 GRAPH_API_VERSION = "v19.0"
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN") or os.environ.get("FB_VERIFY_TOKEN")
