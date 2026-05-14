@@ -673,10 +673,13 @@ document.getElementById("lead-form").addEventListener("submit", async function(e
     if (resp.ok) {
       showSuccess(fullName, planType, coverage, phone);
     } else {
+      const errorText = await readError(resp);
+      console.warn("Primary form submit failed:", errorText);
       // Fallback to CRM ingest
       await submitFallback(fullName, email, phone, planType, coverage, age, smoker, income);
     }
-  } catch {
+  } catch (err) {
+    console.warn("Primary form submit network error:", err);
     await submitFallback(fullName, email, phone, planType, coverage, age, smoker, income);
   } finally {
     setLoading(false);
@@ -699,10 +702,24 @@ async function submitFallback(name, email, phone, plan, coverage, age, smoker, i
     if (resp.ok) {
       showSuccess(name, plan, coverage, phone);
     } else {
-      showError("Submission failed. Please call us directly.");
+      const errorText = await readError(resp);
+      showError(`Submission failed. ${errorText || "Please call us directly."}`);
     }
+  } catch (err) {
+    showError(`Network error. ${err && err.message ? err.message : "Please try again."}`);
+  }
+}
+
+async function readError(resp) {
+  try {
+    const data = await resp.json();
+    return data.error || data.message || JSON.stringify(data);
   } catch {
-    showError("Network error. Please try again.");
+    try {
+      return await resp.text();
+    } catch {
+      return "";
+    }
   }
 }
 

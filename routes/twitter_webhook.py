@@ -21,7 +21,7 @@ import uuid
 from datetime import datetime
 
 import requests
-from flask import Blueprint, request
+from flask import Blueprint, make_response, request
 
 from crm_sync import (
     _truncate,
@@ -688,19 +688,30 @@ def _process_direct_twitter_form(payload):
             conn.close()
 
 
-@twitter_bp.route("/form-submit", methods=["POST"])
+def _cors_response(payload, status=200):
+    response = make_response(payload, status)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
+
+@twitter_bp.route("/form-submit", methods=["POST", "OPTIONS"])
 def twitter_form_submit():
+    if request.method == "OPTIONS":
+        return _cors_response("", 204)
+
     data = request.get_json(silent=True) or {}
     log_event("Twitter direct form POST received", payload=data)
 
     try:
         result = _process_direct_twitter_form(data)
-        return {"success": True, **result}, 201
+        return _cors_response({"success": True, **result}, 201)
     except ValueError as exc:
-        return {"success": False, "error": str(exc)}, 400
+        return _cors_response({"success": False, "error": str(exc)}, 400)
     except Exception as exc:
         log_event("Twitter direct form processing failed", error=str(exc), payload=data)
-        return {"success": False, "error": str(exc)}, 500
+        return _cors_response({"success": False, "error": str(exc)}, 500)
 
 
 @twitter_bp.route("/webhook", methods=["GET", "POST"])
