@@ -3,13 +3,14 @@ import hmac
 import json
 import logging
 import os
+from pathlib import Path
 from decimal import Decimal, InvalidOperation
 import uuid
 
 import pymysql
 import requests
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, request, send_file
 
 from routes.crm_ingest import crm_ingest_bp
 from routes.twitter_webhook import twitter_bp
@@ -279,6 +280,13 @@ def extract_lead_event(data):
 @app.route("/", methods=["GET"])
 def health_check():
     return "OK", 200
+
+
+@app.route("/twitter-lead-form", methods=["GET"])
+@app.route("/twitter_lead_form.html", methods=["GET"])
+def twitter_lead_form():
+    html_path = Path(__file__).resolve().parent.parent / "twitter_lead_form.html"
+    return send_file(html_path)
 
 
 @app.route("/webhook", methods=["GET"])
