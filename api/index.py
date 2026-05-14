@@ -15,6 +15,7 @@ from flask import Flask, request, send_file
 from routes.crm_ingest import crm_ingest_bp
 from routes.landing_ingest import landing_ingest_bp
 from routes.twitter_webhook import twitter_bp
+from webhooks.linkedin import linkedin_bp
 
 
 load_dotenv()
@@ -26,6 +27,7 @@ logging.basicConfig(level=logging.INFO)
 app.register_blueprint(crm_ingest_bp)
 app.register_blueprint(landing_ingest_bp)
 app.register_blueprint(twitter_bp)
+app.register_blueprint(linkedin_bp)
 
 GRAPH_API_VERSION = "v19.0"
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN") or os.environ.get("FB_VERIFY_TOKEN")

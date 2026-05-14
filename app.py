@@ -12,11 +12,13 @@ from routes.crm_ingest import crm_ingest_bp
 
 # NEW: X (Twitter) Lead Ads webhook
 from routes.twitter_webhook import twitter_bp
+from webhooks.linkedin import linkedin_bp
 
 app = Flask(__name__)
 
 app.register_blueprint(crm_ingest_bp)
 app.register_blueprint(twitter_bp)          # → /api/twitter/webhook
+app.register_blueprint(linkedin_bp)         # -> /webhook/linkedin
 
 
 @app.route("/api/webhook", methods=["GET", "POST"])
