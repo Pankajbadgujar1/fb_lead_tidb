@@ -137,10 +137,10 @@ def ingest_contact():
     payload = request.get_json(silent=True) or {}
     source_platform_raw = payload.get("source_platform")
     source_platform = (source_platform_raw or "").strip().lower() or None
-    if source_platform is not None and source_platform not in {"facebook", "instagram", "linkedin"}:
+    if source_platform is not None and source_platform not in {"facebook", "instagram", "linkedin", "twitter"}:
         return {
             "success": False,
-            "error": "source_platform must be 'facebook' or 'instagram' or 'linkedin' when provided.",
+            "error": "source_platform must be 'facebook', 'instagram', 'linkedin', or 'twitter' when provided.",
         }, 400
 
     name = (payload.get("name") or "").strip()
@@ -177,7 +177,7 @@ def ingest_contact():
     message_snippet = None
     message_date = None
 
-    if source_platform in {"facebook", "linkedin"}:
+    if source_platform in {"facebook", "linkedin", "twitter"}:
         headline = _truncate(payload.get("headline"), 255)
         job_title = _truncate(payload.get("headline"))
         company = _truncate(payload.get("current_company"))

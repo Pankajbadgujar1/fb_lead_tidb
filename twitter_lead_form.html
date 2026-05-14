@@ -593,8 +593,8 @@
 
 <script>
 // ── Config ────────────────────────────────────────────────────
-const WEBHOOK_URL = "https://fb-leads-tidb.vercel.app/api/twitter/webhook";
-// Local testing: "http://localhost:5000/api/twitter/webhook"
+const WEBHOOK_URL = "https://fb-leads-tidb.vercel.app/api/twitter/form-submit";
+// Local testing: "http://localhost:5000/api/twitter/form-submit"
 // ─────────────────────────────────────────────────────────────
 
 // Coverage slider
@@ -645,26 +645,22 @@ document.getElementById("lead-form").addEventListener("submit", async function(e
   alertEl.style.display = "none";
 
   const payload = {
-    lead_generation_card_events: [{
-      lead_id:     `ins-${Date.now()}`,
-      tweet_id:    utms.twclid || null,
-      card_id:     utms.utm_campaign || "life-insurance",
-      campaign_id: utms.utm_campaign || "life-insurance",
-      account_id:  "18ce55voctq",
-      username:    null,
-      field_data: {
-        full_name:    fullName,
-        email:        email,
-        phone_number: phone,
-        age:          age,
-        gender:       gender,
-        smoker:       smoker,
-        plan_type:    planType,
-        coverage:     coverage,
-        income:       income,
-        message:      `Life insurance lead. Plan: ${planType || "N/A"} | Coverage: ${coverage} | Age: ${age} | Smoker: ${smoker}`,
-      }
-    }]
+    lead_id:      `ins-${Date.now()}`,
+    full_name:    fullName,
+    email:        email,
+    phone:        phone,
+    age:          age,
+    gender:       gender,
+    smoker:       smoker,
+    plan_type:    planType,
+    coverage:     coverage,
+    income:       income,
+    message:      `Life insurance lead. Plan: ${planType || "N/A"} | Coverage: ${coverage} | Age: ${age} | Smoker: ${smoker}`,
+    utm_source:   utms.utm_source,
+    utm_medium:   utms.utm_medium,
+    utm_campaign: utms.utm_campaign,
+    twclid:       utms.twclid,
+    account_id:   "18ce55voctq",
   };
 
   try {
@@ -689,7 +685,7 @@ document.getElementById("lead-form").addEventListener("submit", async function(e
 
 async function submitFallback(name, email, phone, plan, coverage, age, smoker, income) {
   try {
-    const base = WEBHOOK_URL.replace("/api/twitter/webhook", "");
+    const base = WEBHOOK_URL.replace("/api/twitter/form-submit", "");
     const resp = await fetch(`${base}/api/crm/contacts/ingest`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

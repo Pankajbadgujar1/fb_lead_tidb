@@ -510,6 +510,199 @@ def _process_twitter_lead(meta):
 # Flask routes
 # ─────────────────────────────────────────────────────────────────
 
+def _clean_form_value(value, max_length=500):
+    if value is None:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+    return value[:max_length]
+
+
+def _form_fields_to_lead_data(fields):
+    field_data = []
+    for key, value in fields.items():
+        cleaned = _clean_form_value(value)
+        if cleaned is None:
+            continue
+        field_data.append({"name": key, "values": [cleaned]})
+    return {
+        "field_data": field_data,
+        "raw": {"source": "twitter_form_submit", "fields": fields},
+    }
+
+
+def _extract_direct_form_payload(payload):
+    if not isinstance(payload, dict):
+        payload = {}
+
+    event = {}
+    events = payload.get("lead_generation_card_events")
+    if isinstance(events, list) and events:
+        event = events[0] or {}
+
+    raw_fields = payload.get("field_data") or event.get("field_data") or {}
+    if isinstance(raw_fields, list):
+        fields = _normalize_fields({"field_data": raw_fields})
+    elif isinstance(raw_fields, dict):
+        fields = dict(raw_fields)
+    else:
+        fields = {}
+
+    direct_field_names = [
+        "full_name",
+        "name",
+        "email",
+        "phone",
+        "phone_number",
+        "age",
+        "gender",
+        "smoker",
+        "plan_type",
+        "coverage",
+        "income",
+        "message",
+        "city",
+        "country",
+        "company",
+        "job_title",
+    ]
+    for name in direct_field_names:
+        if name in payload and name not in fields:
+            fields[name] = payload.get(name)
+
+    if fields.get("phone") and not fields.get("phone_number"):
+        fields["phone_number"] = fields.get("phone")
+    if fields.get("name") and not fields.get("full_name"):
+        fields["full_name"] = fields.get("name")
+
+    utm_source = _clean_form_value(payload.get("utm_source") or "twitter", 100)
+    utm_medium = _clean_form_value(payload.get("utm_medium") or "paid", 100)
+    utm_campaign = _clean_form_value(
+        payload.get("utm_campaign") or event.get("campaign_id") or "life-insurance",
+        191,
+    )
+    twclid = _clean_form_value(payload.get("twclid") or event.get("tweet_id"), 191)
+
+    if not fields.get("message"):
+        message_parts = [
+            "Life insurance lead",
+            f"Plan: {fields.get('plan_type') or 'N/A'}",
+            f"Coverage: {fields.get('coverage') or 'N/A'}",
+            f"Age: {fields.get('age') or 'N/A'}",
+            f"Smoker: {fields.get('smoker') or 'N/A'}",
+            f"UTM: {utm_source}/{utm_medium}/{utm_campaign}",
+        ]
+        if twclid:
+            message_parts.append(f"twclid: {twclid}")
+        fields["message"] = " | ".join(message_parts)
+
+    meta = {
+        "lead_id": _clean_form_value(payload.get("lead_id") or event.get("lead_id"), 100)
+        or f"tw-form-{uuid.uuid4()}",
+        "tweet_id": twclid,
+        "card_id": _clean_form_value(
+            payload.get("card_id") or event.get("card_id") or utm_campaign,
+            100,
+        ),
+        "campaign_id": utm_campaign,
+        "account_id": _clean_form_value(
+            payload.get("account_id")
+            or event.get("account_id")
+            or os.getenv("X_AD_ACCOUNT_ID", ""),
+            100,
+        ),
+        "x_username": _clean_form_value(payload.get("username") or event.get("username"), 191),
+    }
+    return fields, meta
+
+
+def _validate_direct_form_fields(fields):
+    full_name = _clean_form_value(fields.get("full_name") or fields.get("name"), 191)
+    email = _clean_form_value(fields.get("email"), 191)
+    phone = _clean_form_value(fields.get("phone_number") or fields.get("phone"), 50)
+    age = _clean_form_value(fields.get("age"), 10)
+
+    if not full_name:
+        return "full_name is required."
+    if not phone:
+        return "phone is required."
+    if not email or "@" not in email:
+        return "valid email is required."
+    if age:
+        try:
+            if int(age) < 18:
+                return "age must be 18 or above."
+        except ValueError:
+            return "age must be a number."
+    return None
+
+
+def _process_direct_twitter_form(payload):
+    fields, meta = _extract_direct_form_payload(payload)
+    error = _validate_direct_form_fields(fields)
+    if error:
+        raise ValueError(error)
+
+    lead_data = _form_fields_to_lead_data(fields)
+    normalized_fields = _normalize_fields(lead_data)
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        contact_id = _save_twitter_to_contacts(cursor, normalized_fields, meta)
+        opp_id = _save_twitter_to_opportunities(cursor, normalized_fields, meta, contact_id)
+        _link_contact_to_opportunity(cursor, contact_id, opp_id)
+        crm_lead_id = _save_twitter_to_leads(cursor, normalized_fields, meta)
+
+        conn.commit()
+        log_event(
+            "Twitter direct form lead saved successfully",
+            lead_id=meta.get("lead_id"),
+            contact_id=contact_id,
+            opportunity_id=opp_id,
+            crm_lead_id=crm_lead_id,
+        )
+        return {
+            "lead_id": meta.get("lead_id"),
+            "contact_id": contact_id,
+            "opportunity_id": opp_id,
+            "crm_lead_id": crm_lead_id,
+        }
+    except Exception as exc:
+        if conn:
+            conn.rollback()
+        log_event(
+            "Failed to save Twitter direct form lead",
+            lead_id=meta.get("lead_id"),
+            error=str(exc),
+        )
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@twitter_bp.route("/form-submit", methods=["POST"])
+def twitter_form_submit():
+    data = request.get_json(silent=True) or {}
+    log_event("Twitter direct form POST received", payload=data)
+
+    try:
+        result = _process_direct_twitter_form(data)
+        return {"success": True, **result}, 201
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}, 400
+    except Exception as exc:
+        log_event("Twitter direct form processing failed", error=str(exc), payload=data)
+        return {"success": False, "error": str(exc)}, 500
+
+
 @twitter_bp.route("/webhook", methods=["GET", "POST"])
 def twitter_webhook():
 
