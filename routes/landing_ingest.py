@@ -92,6 +92,11 @@ def _status_value(value):
     return status
 
 
+def _table_columns(cursor, table_name):
+    cursor.execute(f"SHOW COLUMNS FROM {table_name}")
+    return {row[0] for row in cursor.fetchall()}
+
+
 def _source(payload):
     return (_clean(payload.get("source_platform") or payload.get("source"), 50) or "landing_page").lower()
 
@@ -266,64 +271,62 @@ def _save_opportunity(cursor, payload, meta, contact_id):
     email = _clean(_pick(payload, "email", "personal_email"), 255)
     phone = _clean(_pick(payload, "phone", "phone_number", "mobile_phone"), 50)
 
-    sql = """
+    values_by_column = {
+        "id": opportunity_id,
+        "name": opportunity_name,
+        "account": default_account_id,
+        "assigned_to": default_user_id,
+        "created_by": default_user_id,
+        "createdBy": default_user_id,
+        "updatedBy": default_user_id,
+        "contact": contact_id,
+        "campaign": default_campaign_id,
+        "sales_stage": default_sales_stage,
+        "type": default_opp_type,
+        "status": _status_value(payload.get("status")),
+        "description": _lead_description(payload, meta),
+        "budget": _parse_decimal(payload.get("budget")),
+        "expected_revenue": _parse_decimal(payload.get("expected_revenue") or payload.get("budget")),
+        "currency": _clean(payload.get("currency"), 3),
+        "snapshot_rate": None,
+        "close_date": None,
+        "next_step": _clean(payload.get("next_step"), 191),
+        "source": source,
+        "ad_id": _clean(_pick(payload, "ad_id", "creative_id", "card_id"), 100),
+        "form_id": _clean(meta.get("campaign"), 100),
+        "email": email,
+        "phone": phone,
+        "city": _clean(payload.get("city"), 100),
+        "raw_data": raw_data,
+        "clientName": _clean(full_name or company, 191),
+        "category": _clean(payload.get("category"), 191),
+        "custom_fields_data": json.dumps(payload.get("custom_fields") or {}, default=str),
+    }
+    available_columns = _table_columns(cursor, "crm_Opportunities")
+    columns = [column for column in values_by_column if column in available_columns]
+    placeholders = ", ".join(["%s"] * len(columns))
+    update_columns = [
+        column
+        for column in (
+            "name", "description", "source", "ad_id", "form_id", "email",
+            "phone", "city", "raw_data", "clientName", "updatedBy"
+        )
+        if column in columns
+    ]
+    updates = ",\n            ".join(
+        f"{column} = VALUES({column})" for column in update_columns
+    )
+
+    sql = f"""
         INSERT INTO crm_Opportunities (
-            id, name, account, assigned_to, created_by, createdBy, updatedBy,
-            contact, campaign, sales_stage, type, status, description,
-            budget, expected_revenue, currency, snapshot_rate, close_date,
-            next_step, source, ad_id, form_id, email, phone, city,
-            raw_data, clientName, category, custom_fields_data
+            {", ".join(columns)}
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s
+            {placeholders}
         )
         ON DUPLICATE KEY UPDATE
-            name = VALUES(name),
-            description = VALUES(description),
-            source = VALUES(source),
-            ad_id = VALUES(ad_id),
-            form_id = VALUES(form_id),
-            email = VALUES(email),
-            phone = VALUES(phone),
-            city = VALUES(city),
-            raw_data = VALUES(raw_data),
-            clientName = VALUES(clientName),
-            updatedBy = VALUES(updatedBy)
+            {updates}
     """
-    values = (
-        opportunity_id,
-        opportunity_name,
-        default_account_id,
-        default_user_id,
-        default_user_id,
-        default_user_id,
-        default_user_id,
-        contact_id,
-        default_campaign_id,
-        default_sales_stage,
-        default_opp_type,
-        _status_value(payload.get("status")),
-        _lead_description(payload, meta),
-        _parse_decimal(payload.get("budget")),
-        _parse_decimal(payload.get("expected_revenue") or payload.get("budget")),
-        _clean(payload.get("currency"), 3),
-        None,
-        None,
-        _clean(payload.get("next_step"), 191),
-        source,
-        _clean(_pick(payload, "ad_id", "creative_id", "card_id"), 100),
-        _clean(meta.get("campaign"), 100),
-        email,
-        phone,
-        _clean(payload.get("city"), 100),
-        raw_data,
-        _clean(full_name or company, 191),
-        _clean(payload.get("category"), 191),
-        json.dumps(payload.get("custom_fields") or {}, default=str),
-    )
+    values = tuple(values_by_column[column] for column in columns)
     cursor.execute(sql, values)
     return opportunity_id
 

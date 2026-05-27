@@ -10,6 +10,7 @@ The old `google_ads_leads` table is no longer used.
 
 ```text
 POST https://your-project.vercel.app/api/google-leads
+https://fb-leads-tidb.vercel.app/api/google-leads
 ```
 
 ## Environment Variables
