@@ -9,6 +9,8 @@ from crm_sync import (
 )
 # Existing blueprint
 from routes.crm_ingest import crm_ingest_bp
+from routes.landing_ingest import landing_ingest_bp
+from routes.opportunity_stage import opportunity_stage_bp
 
 # NEW: X (Twitter) Lead Ads webhook
 from routes.twitter_webhook import twitter_bp
@@ -17,6 +19,8 @@ from webhooks.linkedin import linkedin_bp
 app = Flask(__name__)
 
 app.register_blueprint(crm_ingest_bp)
+app.register_blueprint(landing_ingest_bp)
+app.register_blueprint(opportunity_stage_bp)
 app.register_blueprint(twitter_bp)          # → /api/twitter/webhook
 app.register_blueprint(linkedin_bp)         # -> /webhook/linkedin
 

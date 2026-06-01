@@ -14,6 +14,7 @@ from flask import Flask, request, send_file
 
 from routes.crm_ingest import crm_ingest_bp
 from routes.landing_ingest import landing_ingest_bp
+from routes.opportunity_stage import opportunity_stage_bp
 from routes.twitter_webhook import twitter_bp
 from webhooks.linkedin import linkedin_bp
 
@@ -26,6 +27,7 @@ logging.basicConfig(level=logging.INFO)
 # Register CRM ingest blueprint (POST /api/crm/contacts/ingest)
 app.register_blueprint(crm_ingest_bp)
 app.register_blueprint(landing_ingest_bp)
+app.register_blueprint(opportunity_stage_bp)
 app.register_blueprint(twitter_bp)
 app.register_blueprint(linkedin_bp)
 
